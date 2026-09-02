@@ -84,8 +84,8 @@ jobs:
           fi
           MASTER_HEAD=$(git rev-parse origin/master)
           TARGET_HEAD=$(git rev-parse "origin/$TARGET")
-          BEHIND=$(git rev-list --count "origin/$TARGET" "^origin/master")
-          AHEAD=$(git rev-list --count "origin/master" "^origin/$TARGET")
+          BEHIND=$(git rev-list --count "origin/master" "^origin/$TARGET")
+          AHEAD=$(git rev-list --count "origin/$TARGET" "^origin/master")
           echo "master=$MASTER_HEAD target=$TARGET target_head=$TARGET_HEAD behind=$BEHIND ahead=$AHEAD"
           echo "behind_count=$BEHIND" >> "$GITHUB_OUTPUT"
           echo "ahead_count=$AHEAD" >> "$GITHUB_OUTPUT"
