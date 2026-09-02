@@ -95,8 +95,8 @@ jobs:
           set -euo pipefail
           git remote add upstream "$UPSTREAM_URL"
           git fetch --no-tags --prune upstream "$TARGET"
-          BEHIND=$(git rev-list --count "HEAD" "^upstream/$TARGET")
-          AHEAD=$(git rev-list --count "upstream/$TARGET" "^HEAD")
+          BEHIND=$(git rev-list --count "upstream/$TARGET" "^HEAD")
+          AHEAD=$(git rev-list --count "HEAD" "^upstream/$TARGET")
           UPSTREAM_HEAD=$(git rev-parse "upstream/$TARGET")
           echo "behind=$BEHIND ahead=$AHEAD target=$TARGET upstream=$UPSTREAM_URL head=$UPSTREAM_HEAD"
           echo "behind_count=$BEHIND" >> "$GITHUB_OUTPUT"
