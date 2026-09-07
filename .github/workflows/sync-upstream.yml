@@ -7,11 +7,11 @@
 # On a schedule (and manually):
 #   1. fetch upstream's default branch,
 #   2. if upstream has NO new commits already in `master` (no net change), do
-#      nothing — no branch, no PR, no pull;
-#   3. otherwise open ONE PR that merges upstream into `master` (base master,
-#      head = upstream HEAD). A human reviews and merges.
-#      - fast-forwards cleanly when the fork has no custom commits ahead;
-#      - merges (or surfaces conflicts) when the fork has custom commits ahead.
+#      nothing — no branch, no PR, no push;
+#   3. otherwise attempt the merge locally:
+#      - clean merge  -> push `master` directly (auto-merge, no PR);
+#      - merge conflict -> abort and open ONE PR (base master, head = upstream
+#        HEAD) so a human resolves the conflicts and merges.
 #
 # There is deliberately no second hop (no master -> main propagate): `master`
 # IS the working branch and upstream is merged straight into it.
@@ -44,7 +44,7 @@ env:
 
 jobs:
   sync:
-    name: Detect upstream and open one-way merge PR
+    name: Detect upstream and auto-merge (or open conflict PR)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -86,7 +86,7 @@ jobs:
         if: steps.drift.outputs.has_update == 'false'
         run: echo "no new net changes from upstream; nothing to pull"
 
-      - name: Open one-way merge PR
+      - name: Merge upstream into master (auto-merge, or open conflict PR)
         if: steps.drift.outputs.has_update == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,34 +97,45 @@ jobs:
           BEHIND: ${{ steps.drift.outputs.behind_count }}
         run: |
           set -euo pipefail
-          SHORT="${UPSTREAM_HEAD:0:12}"
-          MERGE_BRANCH="sync/upstream-${SHORT}"
-          git checkout -B "$MERGE_BRANCH" "$UPSTREAM_HEAD"
+          git config user.name "dsh-sync-bot"
+          git config user.email "dsh-sync-bot@users.noreply.github.com"
           gh auth setup-git >/dev/null
-          git push origin "$MERGE_BRANCH"
 
-          EXISTING=$(gh pr list --repo "$REPO_FULL" --base master --head "$MERGE_BRANCH" --state all --json number,state \
-            --jq '.[] | select(.state=="OPEN") | .number' || true)
-          if [ -n "$EXISTING" ]; then
-            echo "merge PR #$EXISTING already open for $MERGE_BRANCH; skipping creation."
-            exit 0
+          if git merge --no-edit "upstream/$BRANCH"; then
+            echo "==> clean merge of upstream/${BRANCH} into master; pushing"
+            git push origin master
+            echo "auto-merged upstream ${UPSTREAM} into master (HEAD $(git rev-parse --short HEAD))"
+          else
+            echo "==> upstream/${BRANCH} conflicts with master; opening a PR for human resolution"
+            git merge --abort
+            SHORT="${UPSTREAM_HEAD:0:12}"
+            MERGE_BRANCH="sync/upstream-${SHORT}"
+            git checkout -B "$MERGE_BRANCH" "$UPSTREAM_HEAD"
+            git push origin "$MERGE_BRANCH"
+
+            EXISTING=$(gh pr list --repo "$REPO_FULL" --base master --head "$MERGE_BRANCH" --state all --json number,state \
+              --jq '.[] | select(.state=="OPEN") | .number' || true)
+            if [ -n "$EXISTING" ]; then
+              echo "conflict PR #$EXISTING already open for $MERGE_BRANCH; skipping creation."
+              exit 0
+            fi
+
+            PR_BODY=$(cat <<EOF
+            ## Sync upstream (one-way merge) — conflict needs resolution
+
+            Upstream \`${UPSTREAM}\` could not be auto-merged into \`master\` because it conflicts with the team's custom commits on \`master\`. Resolve the conflicts and merge.
+
+            - upstream HEAD: \`${UPSTREAM_HEAD}\`
+            - merge branch: \`${MERGE_BRANCH}\`
+            - \`master\` is behind by \`${BEHIND}\` upstream commit(s)
+
+            Created by the \`Sync upstream (one-way merge)\` workflow.
+            EOF
+            )
+            gh pr create \
+              --repo "$REPO_FULL" \
+              --title "sync(upstream): resolve conflict merging ${BRANCH} into master (${SHORT})" \
+              --body "$PR_BODY" \
+              --base master \
+              --head "$MERGE_BRANCH"
           fi
-
-          PR_BODY=$(cat <<EOF
-          ## Sync upstream (one-way merge)
-
-          Merges upstream \`${UPSTREAM}\` into the working branch \`master\`. This is a one-way pull: the team fork never pushes upstream, and its own commits on \`master\` are kept.
-
-          - upstream HEAD: \`${UPSTREAM_HEAD}\`
-          - merge branch: \`${MERGE_BRANCH}\`
-          - \`master\` is behind by \`${BEHIND}\` upstream commit(s)
-
-          Merge this PR (fast-forwards if the fork has no custom commits ahead; otherwise merge and resolve any conflicts). Created by the \`Sync upstream (one-way merge)\` workflow.
-          EOF
-          )
-          gh pr create \
-            --repo "$REPO_FULL" \
-            --title "sync(upstream): one-way merge ${BRANCH} into master (${SHORT})" \
-            --body "$PR_BODY" \
-            --base master \
-            --head "$MERGE_BRANCH"
