@@ -80,11 +80,17 @@
 # `skill-filesystem` contributes local-root discovery for agents on this preset, and
 # `tool-skill` gives them the catalog and loader; the merged catalog also
 # carries whatever the deployment registered globally (repository plugins).
+# `skill-bootstrap` auto-injects one methodology skill for non-trivial multi-turn
+# programming sessions, so an agent starts engineering work with the skill's
+# instructions already in context instead of waiting to load it from the catalog.
 - id: skill-filesystem
   name: '@deepseek-ai/dsh-skill-filesystem'
 
 - id: tool-skill
   name: '@deepseek-ai/dsh-tool-skill'
+
+- id: skill-bootstrap
+  name: '@deepseek-ai/dsh-skill-bootstrap'
 
 # ── goals ───────────────────────────────────────────────────────────────────
 

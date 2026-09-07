@@ -2094,6 +2094,26 @@ export interface Config {
 
 来源：[`packages/skill/skill/src/index.ts:280`](../packages/skill/skill/src/index.ts)
 
+<a id="deepseek-aidsh-skill-bootstrap"></a>
+
+## `@deepseek-ai/dsh-skill-bootstrap`
+
+需要：`skills`
+
+```ts config-catalog
+/** Model-facing conditional skill bootstrap configuration. */
+export interface Config {
+  /** Skill injected when the gate opens; a kebab-case skill name. */
+  skillName?: string
+  /** Turn at which the session escalates and injects regardless of the first-request heuristic. */
+  escalateAtTurn?: number
+  /** Case-insensitive regex sources; a first request matching any is a non-trivial programming request. */
+  programmingSignals?: string[]
+}
+```
+
+来源：[`packages/skill/skill-bootstrap/src/index.ts:51`](../packages/skill/skill-bootstrap/src/index.ts)
+
 <a id="deepseek-aidsh-skill-filesystem"></a>
 
 ## `@deepseek-ai/dsh-skill-filesystem`

@@ -27,6 +27,7 @@ skill 组让 agent（智能体）和用户按需使用可复用的任务专项�
 | [`skill/`](skill/README.zh.md) | 合并任意提供方的 skill 目录、并按名称解析出胜出 skill 的注册表 | `ctx.skills` |
 | [`skill-filesystem/`](skill-filesystem/README.zh.md) | 从项目、自定义与用户目录发现 skill，并监视其变更 | 注册到 `ctx.skills` |
 | [`skill-badge/`](skill-badge/README.zh.md) | 随包附带官方「powered by dsh」徽章 skill，默认禁用 | 注册到 `ctx.skills` |
+| [`skill-bootstrap/`](skill-bootstrap/README.zh.md) | 每个会话注入一次某个 skill 的主体，仅限非平凡的多轮编程请求 | 监听 `agent/pre-step` |
 | [`tool-skill/`](tool-skill/README.zh.md) | 发布会话 skill 目录与面向模型的 `skill` 加载工具 | 注册到 `ctx.tools` |
 
 -----

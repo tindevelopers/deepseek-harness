@@ -80,6 +80,7 @@
     "@deepseek-ai/dsh-settings-file": "workspace:^",
     "@deepseek-ai/dsh-skill": "workspace:^",
     "@deepseek-ai/dsh-skill-badge": "workspace:^",
+    "@deepseek-ai/dsh-skill-bootstrap": "workspace:^",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:^",
     "@deepseek-ai/dsh-spill-local": "workspace:^",
     "@deepseek-ai/dsh-spill-policy": "workspace:^",
