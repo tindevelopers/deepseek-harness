@@ -1,37 +1,39 @@
-# Track the canonical upstream into the team fork. Every 3 days at 06:00 UTC,
-# compares the team fork's master to upstream/master and proposes a fast-forward
-# sync PR, or — when the fork has diverged — opens an issue for human review.
+# One-way upstream pull into the team fork's working branch.
+#
+# The team fork NEVER pushes to upstream. It only pulls upstream commits down.
+# Because the fork keeps its own custom commits on `master`, upstream changes
+# are MERGED into `master` (one-way) rather than fast-forwarding to match.
+#
+# On a schedule (and manually):
+#   1. fetch upstream's default branch,
+#   2. if `master` is behind upstream, open ONE PR that merges upstream into
+#      `master` (base master, head = upstream HEAD). A human reviews and merges.
+#      - fast-forwards cleanly when the fork has no custom commits ahead;
+#      - merges (or surfaces conflicts) when the fork has custom commits ahead.
+#
+# There is deliberately no second hop (no master -> main propagate): `master`
+# IS the working branch and upstream is merged straight into it.
 #
 # Lives in the team-fork-as-vendor lane: schedule + workflow_dispatch only,
-# never pull_request — see .github/AGENTS.md.
-#
-# Configuration:
-#   - vars.UPSTREAM_REPO         (optional; defaults to deepseek-ai/deepseek-harness)
-#   - secrets.SLACK_WEBHOOK_URL  (optional; if unset, Slack step skips silently)
-name: Sync upstream
+# never pull_request.
+name: Sync upstream (one-way merge)
 
 on:
   schedule:
-    # Every 3 days at 06:00 UTC.
-    - cron: '0 6 */3 * *'
+    # Every day at 02:00 UTC. Change the cron to adjust cadence.
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       upstream_repo:
-        description: 'Override upstream repo (owner/name). Defaults to vars.UPSTREAM_REPO or deepseek-ai/deepseek-harness.'
-        required: false
-        type: string
-      target_branch:
-        description: 'Pin a target branch on this fork. Default discovers upstream default via GitHub API.'
+        description: 'Override upstream repo (owner/name). Defaults to deepseek-ai/deepseek-harness.'
         required: false
         type: string
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 concurrency:
-  # One sync-upstream run at a time; subsequent runs queue.
   group: sync-upstream
   cancel-in-progress: false
 
@@ -40,172 +42,83 @@ env:
 
 jobs:
   sync:
-    name: Detect drift and propose sync
+    name: Detect upstream and open one-way merge PR
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
-      - name: Resolve upstream
+      - name: Resolve upstream repo and default branch
         id: upstream
         env:
           INPUT_REPO: ${{ inputs.upstream_repo }}
-          VAR_REPO: ${{ vars.UPSTREAM_REPO }}
-        run: |
-          if [ -n "$INPUT_REPO" ]; then
-            REPO="$INPUT_REPO"
-          elif [ -n "$VAR_REPO" ]; then
-            REPO="$VAR_REPO"
-          else
-            REPO="$DEFAULT_UPSTREAM_REPO"
-          fi
-          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
-          echo "Resolved upstream to $REPO"
-
-      - name: Resolve target branch
-        id: target
-        env:
-          INPUT_BRANCH: ${{ inputs.target_branch }}
-          VAR_BRANCH: ${{ vars.UPSTREAM_DEFAULT_BRANCH }}
-          UPSTREAM: ${{ steps.upstream.outputs.repo }}
         run: |
           set -euo pipefail
-          if [ -n "$INPUT_BRANCH" ]; then
-            BRANCH="$INPUT_BRANCH"
-          elif [ -n "$VAR_BRANCH" ]; then
-            BRANCH="$VAR_BRANCH"
-          else
-            # Ask the upstream for its default branch so a rename on their
-            # side is followed automatically. Fall back to "master" only if
-            # the API is unreachable.
-            BRANCH=$(gh api "repos/${UPSTREAM}" --jq '.default_branch' 2>/dev/null || echo master)
-          fi
+          REPO="${INPUT_REPO:-${DEFAULT_UPSTREAM_REPO}}"
+          BRANCH=$(gh api "repos/${REPO}" --jq '.default_branch' 2>/dev/null || echo master)
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-          echo "Resolved target branch to $BRANCH"
+          echo "resolved upstream ${REPO} default branch: ${BRANCH}"
 
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: master
           persist-credentials: false
 
-      - name: Compute drift
+      - name: Detect drift behind upstream
         id: drift
         env:
           UPSTREAM_URL: https://github.com/${{ steps.upstream.outputs.repo }}.git
-          TARGET: ${{ steps.target.outputs.branch }}
+          BRANCH: ${{ steps.upstream.outputs.branch }}
         run: |
           set -euo pipefail
           git remote add upstream "$UPSTREAM_URL"
-          git fetch --no-tags --prune upstream "$TARGET"
-          BEHIND=$(git rev-list --count "upstream/$TARGET" "^HEAD")
-          AHEAD=$(git rev-list --count "HEAD" "^upstream/$TARGET")
-          UPSTREAM_HEAD=$(git rev-parse "upstream/$TARGET")
-          echo "behind=$BEHIND ahead=$AHEAD target=$TARGET upstream=$UPSTREAM_URL head=$UPSTREAM_HEAD"
+          git fetch --no-tags --prune upstream "$BRANCH"
+          BEHIND=$(git rev-list --count "upstream/$BRANCH" ^HEAD)
+          HEAD_SHA=$(git rev-parse "upstream/$BRANCH")
+          echo "behind=$BEHIND head=$HEAD_SHA branch=$BRANCH"
           echo "behind_count=$BEHIND" >> "$GITHUB_OUTPUT"
-          echo "ahead_count=$AHEAD" >> "$GITHUB_OUTPUT"
-          echo "upstream_head=$UPSTREAM_HEAD" >> "$GITHUB_OUTPUT"
-          if [ "$BEHIND" -gt 0 ] && [ "$AHEAD" -eq 0 ]; then
-            echo "drift=fast-forward" >> "$GITHUB_OUTPUT"
-          elif [ "$BEHIND" -gt 0 ] && [ "$AHEAD" -gt 0 ]; then
-            echo "drift=diverged" >> "$GITHUB_OUTPUT"
-          else
-            echo "drift=none" >> "$GITHUB_OUTPUT"
-          fi
+          echo "upstream_head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "has_update=$([ "$BEHIND" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
-      - name: Open sync PR (fast-forward)
-        if: steps.drift.outputs.drift == 'fast-forward'
+      - name: Open one-way merge PR
+        if: steps.drift.outputs.has_update == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPSTREAM: ${{ steps.upstream.outputs.repo }}
-          TARGET: ${{ steps.target.outputs.branch }}
           REPO_FULL: ${{ github.repository }}
+          UPSTREAM: ${{ steps.upstream.outputs.repo }}
+          BRANCH: ${{ steps.upstream.outputs.branch }}
+          UPSTREAM_HEAD: ${{ steps.drift.outputs.upstream_head }}
+          BEHIND: ${{ steps.drift.outputs.behind_count }}
         run: |
           set -euo pipefail
-          UPSTREAM_HEAD="${{ steps.drift.outputs.upstream_head }}"
-          BEHIND="${{ steps.drift.outputs.behind_count }}"
-          AHEAD="${{ steps.drift.outputs.ahead_count }}"
           SHORT="${UPSTREAM_HEAD:0:12}"
-          BRANCH="sync/upstream-${SHORT}"
-          git checkout -B "$BRANCH" "$UPSTREAM_HEAD"
+          MERGE_BRANCH="sync/upstream-${SHORT}"
+          git checkout -B "$MERGE_BRANCH" "$UPSTREAM_HEAD"
           gh auth setup-git >/dev/null
-          git push origin "$BRANCH"
-          EXISTING=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state all --json number,state \
+          git push origin "$MERGE_BRANCH"
+
+          EXISTING=$(gh pr list --repo "$REPO_FULL" --base master --head "$MERGE_BRANCH" --state all --json number,state \
             --jq '.[] | select(.state=="OPEN") | .number' || true)
           if [ -n "$EXISTING" ]; then
-            echo "Sync PR #$EXISTING already open for $BRANCH; skipping creation."
+            echo "merge PR #$EXISTING already open for $MERGE_BRANCH; skipping creation."
             exit 0
           fi
-          PR_BODY=$(cat <<EOF
-          ## Sync upstream
 
-          Fast-forward brings \`${REPO_FULL}\` to upstream \`${UPSTREAM}\` on branch \`${TARGET}\`.
+          PR_BODY=$(cat <<EOF
+          ## Sync upstream (one-way merge)
+
+          Merges upstream \`${UPSTREAM}\` into the working branch \`master\`. This is a one-way pull: the team fork never pushes upstream, and its own commits on \`master\` are kept.
 
           - upstream HEAD: \`${UPSTREAM_HEAD}\`
-          - upstream short SHA: \`${SHORT}\`
-          - sync branch: \`${BRANCH}\`
-          - behind by \`${BEHIND}\` upstream commits
-          - ahead by \`${AHEAD}\` fork-only commits
+          - merge branch: \`${MERGE_BRANCH}\`
+          - \`master\` is behind by \`${BEHIND}\` upstream commit(s)
 
-          Created by the \`Sync upstream\` GitHub Action. CI on this PR is the gate; humans click the merge button.
+          Merge this PR (fast-forwards if the fork has no custom commits ahead; otherwise merge and resolve any conflicts). Created by the \`Sync upstream (one-way merge)\` workflow.
           EOF
           )
           gh pr create \
             --repo "$REPO_FULL" \
-            --title "sync(upstream): bring ${TARGET} to ${SHORT} (${UPSTREAM})" \
+            --title "sync(upstream): one-way merge ${BRANCH} into master (${SHORT})" \
             --body "$PR_BODY" \
-            --base "$TARGET" \
-            --head "$BRANCH"
-
-      - name: File diverged-drift issue
-        if: steps.drift.outputs.drift == 'diverged'
-        env:
-          UPSTREAM: ${{ steps.upstream.outputs.repo }}
-          TARGET: ${{ steps.target.outputs.branch }}
-          BEHIND: ${{ steps.drift.outputs.behind_count }}
-          AHEAD: ${{ steps.drift.outputs.ahead_count }}
-          UPSTREAM_HEAD: ${{ steps.drift.outputs.upstream_head }}
-        run: |
-          set -euo pipefail
-          cat > /tmp/issue_body.md <<EOF
-          The team fork has diverged from upstream \`${UPSTREAM}\` on branch \`${TARGET}\`. A fast-forward sync is not possible.
-
-          - local HEAD: \`${GITHUB_SHA}\`
-          - upstream HEAD: \`${UPSTREAM_HEAD}\`
-          - ahead: \`${AHEAD}\` fork-only commits
-          - behind: \`${BEHIND}\` upstream commits
-
-          Resolve by either:
-
-          1. Merging \`upstream/${TARGET}\` into a feature branch and pushing the result to ${TARGET} on this fork, or
-          2. Opening a PR from this fork's diverged commits to upstream.
-
-          Triggered by the \`Sync upstream\` GitHub Action.
-          EOF
-          gh issue create \
-            --repo "${{ github.repository }}" \
-            --title "drift: diverged from ${UPSTREAM} on ${TARGET}" \
-            --body-file /tmp/issue_body.md
-
-      - name: Notify Slack
-        if: steps.drift.outputs.drift != 'none' && steps.drift.outputs.drift != ''
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          UPSTREAM: ${{ steps.upstream.outputs.repo }}
-          TARGET: ${{ steps.target.outputs.branch }}
-          DRIFT: ${{ steps.drift.outputs.drift }}
-          BEHIND: ${{ steps.drift.outputs.behind_count }}
-          AHEAD: ${{ steps.drift.outputs.ahead_count }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "SLACK_WEBHOOK_URL not set; skipping Slack notification."
-            exit 0
-          fi
-          if [ "$DRIFT" = "diverged" ]; then
-            HEADLINE=":warning: Drift detected — team fork has diverged from \`${UPSTREAM}\`. Issue opened."
-          else
-            HEADLINE=":arrows_counterclockwise: Sync PR opened — brings \`${TARGET}\` toward \`${UPSTREAM}\`."
-          fi
-          TEXT="${HEADLINE}\nBehind: \`${BEHIND}\` / Ahead: \`${AHEAD}\`\nRun: ${RUN_URL}"
-          PAYLOAD=$(jq -Rn --arg text "$TEXT" '{text: $text}')
-          curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$SLACK_WEBHOOK_URL"
-          echo "Slack notification sent."
+            --base master \
+            --head "$MERGE_BRANCH"
