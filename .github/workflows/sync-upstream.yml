@@ -6,8 +6,10 @@
 #
 # On a schedule (and manually):
 #   1. fetch upstream's default branch,
-#   2. if `master` is behind upstream, open ONE PR that merges upstream into
-#      `master` (base master, head = upstream HEAD). A human reviews and merges.
+#   2. if upstream has NO new commits already in `master` (no net change), do
+#      nothing — no branch, no PR, no pull;
+#   3. otherwise open ONE PR that merges upstream into `master` (base master,
+#      head = upstream HEAD). A human reviews and merges.
 #      - fast-forwards cleanly when the fork has no custom commits ahead;
 #      - merges (or surfaces conflicts) when the fork has custom commits ahead.
 #
@@ -79,6 +81,10 @@ jobs:
           echo "behind_count=$BEHIND" >> "$GITHUB_OUTPUT"
           echo "upstream_head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "has_update=$([ "$BEHIND" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Nothing to pull (up to date with upstream)
+        if: steps.drift.outputs.has_update == 'false'
+        run: echo "no new net changes from upstream; nothing to pull"
 
       - name: Open one-way merge PR
         if: steps.drift.outputs.has_update == 'true'

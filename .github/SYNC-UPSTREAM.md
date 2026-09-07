@@ -28,7 +28,7 @@ Each boundary is gated on a human review: the workflow opens the PR, CI runs, a 
 
 | State | Action |
 |---|---|
-| `master` at or ahead of upstream | Silent. |
+| `master` already contains all of upstream's commits (no new net changes) | Nothing to pull: no branch, no PR, no fetch-triggered merge. The run logs `no new net changes from upstream; nothing to pull`. |
 | `master` behind upstream (with or without custom commits ahead) | Pushes a `sync/upstream-<sha12>` branch at upstream HEAD and opens a PR titled `sync(upstream): one-way merge <branch> into master (<sha12>)` against `master`. |
 | Merge has conflicts | The PR shows them; a human resolves in the PR and merges. |
 
