@@ -56,6 +56,18 @@ Start with the [development guide](docs/development.md) and [architecture docume
 
 For agents, follow [AGENTS.md](AGENTS.md).
 
+## Skills and shared setup
+
+This checkout carries a **local mirror** of the team's shared skills at `.dsh/skills/`. When a session runs inside this repository, DSH discovers them automatically as the `project-dsh` skill root — no NAS mount, no `DSH_AGENTS_HOME`, no extra config — so they work offline and load fast.
+
+Skills stay out of the context window until needed: the model sees a compact catalog (each skill's name and one capped description, bounded by `catalogDescriptionMaxLength`, default 500) and only one skill's full instructions load when the `skill` tool or a `/name` command requests it.
+
+To pick up updated skills, `git pull` and start a new session. The NAS holds the canonical, git-versioned source (skills, default model, credential, machine wiring) on the internal network only; see `.dsh/skills/README.md` and the NAS runbook (`dsh-config/README.md`).
+
+Credentials and settings stay local in `~/.dsh` (`settings.yaml`, `.credentials.yaml`) and are confidential — never commit or share them.
+
+Running sessions outside this checkout? Copy the skills to a local root and point `DSH_AGENTS_HOME` at it (for example `~/.agents/skills`) so those sessions get them too.
+
 ## License
 
 [MIT](LICENSE)

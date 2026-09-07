@@ -77,6 +77,18 @@ pnpm dsh web
 
 面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
 
+## 技能与共享配置
+
+本仓库携带团队共享技能的一份**本地镜像**，位于 `.dsh/skills/`。当会话在本仓库内运行时，DSH 会自动将其发现为 `project-dsh` 技能根 — 无需挂载 NAS、无需 `DSH_AGENTS_HOME`、也无需额外配置 — 因此可以离线使用，且加载更快。
+
+技能在需要之前不会占用上下文窗口：模型只看到一份精简目录（每个技能的名称与一段受限描述，受 `catalogDescriptionMaxLength` 约束，默认 500），只有当 `skill` 工具或 `/name` 命令请求时，才会加载某个技能的完整说明。
+
+要获取更新的技能，执行 `git pull` 并开启一个新会话即可。NAS 是唯一规范的、纳入 git 管理的来源（技能、默认模型、凭据、机器配置），且仅在内部网络可用；参见 `.dsh/skills/README.md` 与 NAS runbook（`dsh-config/README.md`）。
+
+凭据与设置保留在本机 `~/.dsh`（`settings.yaml`、`.credentials.yaml`），属于机密 — 切勿提交或分享。
+
+如果要在本仓库之外运行会话？请把技能复制到某个本地根目录，并将 `DSH_AGENTS_HOME` 指向它（例如 `~/.agents/skills`），这样那些会话也能使用这些技能。
+
 ## 许可证
 
 [MIT](LICENSE)
