@@ -123,18 +123,12 @@ jobs:
               exit 0
             fi
 
-            PR_BODY=$(cat <<EOF
-            ## Sync upstream (one-way merge) — conflict needs resolution
-
+            PR_BODY="## Sync upstream (one-way merge) — conflict needs resolution
             Upstream \`${UPSTREAM}\` could not be auto-merged into \`master\` because it conflicts with the team's custom commits on \`master\`. Resolve the conflicts and merge.
-
             - upstream HEAD: \`${UPSTREAM_HEAD}\`
             - merge branch: \`${MERGE_BRANCH}\`
             - \`master\` is behind by \`${BEHIND}\` upstream commit(s)
-
-            Created by the \`Sync upstream (one-way merge)\` workflow.
-            EOF
-            )
+            Created by the \`Sync upstream (one-way merge)\` workflow."
             gh pr create \
               --repo "$REPO_FULL" \
               --title "sync(upstream): resolve conflict merging ${BRANCH} into master (${SHORT})" \
