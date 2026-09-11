@@ -1,19 +1,21 @@
-# Track the canonical upstream into the team fork. Every 3 days at 06:00 UTC,
+# Track the canonical upstream into the team fork. Weekly on Monday at 06:30 UTC,
 # compares the team fork's master to upstream/master and proposes a fast-forward
-# sync PR, or — when the fork has diverged — opens an issue for human review.
+# sync PR with auto-merge once CI passes, or — when the fork has diverged — opens
+# an issue for human review.
 #
 # Lives in the team-fork-as-vendor lane: schedule + workflow_dispatch only,
 # never pull_request — see .github/AGENTS.md.
 #
 # Configuration:
-#   - vars.UPSTREAM_REPO         (optional; defaults to deepseek-ai/deepseek-harness)
-#   - secrets.SLACK_WEBHOOK_URL  (optional; if unset, Slack step skips silently)
+#   - vars.UPSTREAM_REPO              (optional; defaults to deepseek-ai/deepseek-harness)
+#   - secrets.SLACK_WEBHOOK_URL       (optional; if unset, Slack step skips silently)
+#   - secrets.MATTERMOST_WEBHOOK_URL  (optional; if unset, Mattermost step skips silently)
 name: Sync upstream
 
 on:
   schedule:
-    # Every 3 days at 06:00 UTC.
-    - cron: '0 6 */3 * *'
+    # Weekly on Monday at 06:30 UTC.
+    - cron: '30 6 * * MON'
   workflow_dispatch:
     inputs:
       upstream_repo:
@@ -110,7 +112,7 @@ jobs:
             echo "drift=none" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open sync PR (fast-forward)
+      - name: Open sync PR (fast-forward) and queue auto-merge
         if: steps.drift.outputs.drift == 'fast-forward'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,13 +129,9 @@ jobs:
           git checkout -B "$BRANCH" "$UPSTREAM_HEAD"
           gh auth setup-git >/dev/null
           git push origin "$BRANCH"
-          EXISTING=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state all --json number,state \
-            --jq '.[] | select(.state=="OPEN") | .number' || true)
-          if [ -n "$EXISTING" ]; then
-            echo "Sync PR #$EXISTING already open for $BRANCH; skipping creation."
-            exit 0
-          fi
-          PR_BODY=$(cat <<EOF
+          PR_NUMBER=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            PR_BODY=$(cat <<EOF
           ## Sync upstream
 
           Fast-forward brings \`${REPO_FULL}\` to upstream \`${UPSTREAM}\` on branch \`${TARGET}\`.
@@ -144,15 +142,25 @@ jobs:
           - behind by \`${BEHIND}\` upstream commits
           - ahead by \`${AHEAD}\` fork-only commits
 
-          Created by the \`Sync upstream\` GitHub Action. CI on this PR is the gate; humans click the merge button.
+          Created by the \`Sync upstream\` GitHub Action. Auto-merge is queued once the required CI checks pass.
           EOF
           )
-          gh pr create \
-            --repo "$REPO_FULL" \
-            --title "sync(upstream): bring ${TARGET} to ${SHORT} (${UPSTREAM})" \
-            --body "$PR_BODY" \
-            --base "$TARGET" \
-            --head "$BRANCH"
+            gh pr create \
+              --repo "$REPO_FULL" \
+              --title "sync(upstream): bring ${TARGET} to ${SHORT} (${UPSTREAM})" \
+              --body "$PR_BODY" \
+              --base "$TARGET" \
+              --head "$BRANCH"
+            PR_NUMBER=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          else
+            echo "Sync PR #$PR_NUMBER already open for $BRANCH; reusing for auto-merge."
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr merge "$PR_NUMBER" --repo "$REPO_FULL" --auto --squash --delete-branch
+            echo "Auto-merge queued on PR #$PR_NUMBER."
+          else
+            echo "No PR could be located; auto-merge not queued."
+          fi
 
       - name: File diverged-drift issue
         if: steps.drift.outputs.drift == 'diverged'
@@ -209,3 +217,29 @@ jobs:
           PAYLOAD=$(jq -Rn --arg text "$TEXT" '{text: $text}')
           curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$SLACK_WEBHOOK_URL"
           echo "Slack notification sent."
+
+      - name: Notify Mattermost
+        if: steps.drift.outputs.drift != 'none' && steps.drift.outputs.drift != ''
+        env:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          UPSTREAM: ${{ steps.upstream.outputs.repo }}
+          TARGET: ${{ steps.target.outputs.branch }}
+          DRIFT: ${{ steps.drift.outputs.drift }}
+          BEHIND: ${{ steps.drift.outputs.behind_count }}
+          AHEAD: ${{ steps.drift.outputs.ahead_count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MATTERMOST_WEBHOOK_URL" ]; then
+            echo "MATTERMOST_WEBHOOK_URL not set; skipping Mattermost notification."
+            exit 0
+          fi
+          if [ "$DRIFT" = "diverged" ]; then
+            HEADLINE=":warning: Drift detected — team fork has diverged from \`${UPSTREAM}\`. Issue opened."
+          else
+            HEADLINE=":arrows_counterclockwise: Sync PR opened and auto-merge queued — brings \`${TARGET}\` toward \`${UPSTREAM}\`."
+          fi
+          TEXT="${HEADLINE}\nBehind: \`${BEHIND}\` / Ahead: \`${AHEAD}\`\nRun: ${RUN_URL}"
+          PAYLOAD=$(jq -Rn --arg text "$TEXT" '{text: $text}')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$MATTERMOST_WEBHOOK_URL"
+          echo "Mattermost notification sent."

@@ -97,7 +97,7 @@ jobs:
             echo "should_open=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open propagate PR
+      - name: Open propagate PR and queue auto-merge
         if: steps.check.outputs.should_open == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,13 +113,9 @@ jobs:
           git checkout -B "$BRANCH" "origin/master"
           gh auth setup-git >/dev/null
           git push origin "$BRANCH"
-          EXISTING=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state all --json number,state \
-            --jq '.[] | select(.state=="OPEN") | .number' || true)
-          if [ -n "$EXISTING" ]; then
-            echo "propagate PR #$EXISTING already open for $BRANCH; skipping creation."
-            exit 0
-          fi
-          PR_BODY=$(cat <<EOF
+          PR_NUMBER=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            PR_BODY=$(cat <<EOF
           ## Sync master → main
 
           Brings \`${TARGET}\` up to \`master\` after \`Sync upstream\` landed.
@@ -130,14 +126,24 @@ jobs:
           - behind by \`${BEHIND}\` master-only commits
           - ahead by \`${AHEAD}\` team-only commits already on ${TARGET}
 
-          This PR was opened automatically by the \`Sync master to main\` GitHub Action in response to a \`sync/upstream-${SHORT}\` PR landing on master. CI on this PR is the gate; humans click the merge button.
+          This PR was opened automatically by the \`Sync master to main\` GitHub Action in response to a \`sync/upstream-${SHORT}\` PR landing on master. Auto-merge is queued once the required CI checks pass.
 
           The expected merge is a fast-forward into \`${TARGET}\` because the propagate branch is positioned at \`origin/master\`. If the team's \`${TARGET}\` has moved ahead locally (its own PRs landed first), you'll get a real merge conflict and a non-FF landing, which is fine — review the conflict, resolve, and merge.
           EOF
           )
-          gh pr create \
-            --repo "$REPO_FULL" \
-            --title "sync(master→${TARGET}): bring ${TARGET} to ${SHORT}" \
-            --body "$PR_BODY" \
-            --base "$TARGET" \
-            --head "$BRANCH"
+            gh pr create \
+              --repo "$REPO_FULL" \
+              --title "sync(master→${TARGET}): bring ${TARGET} to ${SHORT}" \
+              --body "$PR_BODY" \
+              --base "$TARGET" \
+              --head "$BRANCH"
+            PR_NUMBER=$(gh pr list --repo "$REPO_FULL" --base "$TARGET" --head "$BRANCH" --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          else
+            echo "propagate PR #$PR_NUMBER already open for $BRANCH; reusing for auto-merge."
+          fi
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr merge "$PR_NUMBER" --repo "$REPO_FULL" --auto --squash --delete-branch
+            echo "Auto-merge queued on PR #$PR_NUMBER."
+          else
+            echo "No propagate PR could be located; auto-merge not queued."
+          fi
