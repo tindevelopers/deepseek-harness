@@ -1172,6 +1172,9 @@ importers:
       '@deepseek-ai/dsh-skill-badge':
         specifier: workspace:^
         version: link:../../skill/skill-badge
+      '@deepseek-ai/dsh-skill-bootstrap':
+        specifier: workspace:^
+        version: link:../../skill/skill-bootstrap
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:^
         version: link:../../skill/skill-filesystem

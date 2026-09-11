@@ -104,14 +104,40 @@ jobs:
             NEW_COMMITS=$(gh api "repos/${UPSTREAM}/compare/${PREV}...${NEW_SHA}" --jq -r '(.commits // [])[:5] | .[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' | head -c 1500 || true)
           fi
 
-          # Persist the new SHA. If the GITHUB_TOKEN lacks permission to write
-          # repo variables (403), log a warning and continue — the next run
-          # will re-detect the same drift and re-notify, which is acceptable.
-          if gh variable set "$STATE_VAR" --repo "$REPO_FULL" --body "$NEW_SHA" 2>/dev/null; then
-            echo "Updated $STATE_VAR to $NEW_SHORT (was ${PREV_SHORT})."
-          else
-            echo "::warning::Could not persist $STATE_VAR (GITHUB_TOKEN may lack variable write permission). Next run will re-detect this drift."
-          fi
+          # Persist the new SHA via the GitHub REST API. This bypasses gh CLI
+          # version variance: 'gh variable set --body' is rejected on older
+          # GitHub-hosted runner images (the recurring --body support gap on
+          # gh <2.40 ish). curl + REST is portable across runner versions.
+          PAYLOAD=$(jq -nc --arg v "$NEW_SHA" '{value: $v}')
+          PATCH_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "https://api.github.com/repos/$REPO_FULL/actions/variables/$STATE_VAR")
+          case "$PATCH_STATUS" in
+            200|204)
+              echo "Updated $STATE_VAR to $NEW_SHORT (was ${PREV_SHORT})."
+              ;;
+            404)
+              # Variable doesn't exist yet — create it.
+              CREATE_PAYLOAD=$(jq -nc --arg n "$STATE_VAR" --arg v "$NEW_SHA" '{name: $n, value: $v}')
+              CREATE_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "Content-Type: application/json" \
+                -d "$CREATE_PAYLOAD" \
+                "https://api.github.com/repos/$REPO_FULL/actions/variables")
+              if [ "$CREATE_STATUS" = "201" ]; then
+                echo "Created $STATE_VAR with $NEW_SHORT (was ${PREV_SHORT})."
+              else
+                echo "::warning::Could not create $STATE_VAR (HTTP $CREATE_STATUS). Next run will re-detect this drift."
+              fi
+              ;;
+            *)
+              echo "::warning::Could not update $STATE_VAR (HTTP $PATCH_STATUS). Next run will re-detect this drift."
+              ;;
+          esac
 
           if [ -z "$MATTERMOST_WEBHOOK_URL" ]; then
             echo "MATTERMOST_WEBHOOK_URL not set; skipping notification."
