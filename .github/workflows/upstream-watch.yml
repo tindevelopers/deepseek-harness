@@ -1,0 +1,116 @@
+# Cheap hourly check on upstream HEAD so the team gets a heads-up when upstream
+# advanced between weekly syncs. Runs at the top of every hour via the GitHub
+# API, persists the SHA in vars.LAST_SEEN_UPSTREAM_SHA, and posts a short
+# Mattermost summary when the SHA differs from the last recorded value.
+#
+# This workflow does NOT trigger sync-upstream.yml — the weekly Monday 06:30
+# schedule owns the actual one-way merge into master.
+#
+# Lives in the team-fork-as-vendor lane — schedule + workflow_dispatch only,
+# never pull_request.
+#
+# Configuration:
+#   - vars.UPSTREAM_REPO              (optional; defaults to deepseek-ai/deepseek-harness)
+#   - secrets.MATTERMOST_WEBHOOK_URL  (optional; if unset, the Mattermost step skips silently)
+name: Watch upstream
+
+on:
+  schedule:
+    # Hourly on the hour.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  # One watch per repo at a time; subsequent runs queue.
+  group: upstream-watch
+  cancel-in-progress: false
+
+env:
+  DEFAULT_UPSTREAM_REPO: 'deepseek-ai/deepseek-harness'
+  STATE_VAR: 'LAST_SEEN_UPSTREAM_SHA'
+
+jobs:
+  watch:
+    name: Track upstream HEAD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Resolve upstream repo
+        id: upstream
+        env:
+          VAR_REPO: ${{ vars.UPSTREAM_REPO }}
+        run: |
+          set -euo pipefail
+          REPO="${VAR_REPO:-$DEFAULT_UPSTREAM_REPO}"
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "Resolved upstream to $REPO"
+
+      - name: Resolve upstream default branch
+        id: target
+        env:
+          UPSTREAM: ${{ steps.upstream.outputs.repo }}
+        run: |
+          set -euo pipefail
+          BRANCH=$(gh api "repos/${UPSTREAM}" --jq '.default_branch' 2>/dev/null || echo master)
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Resolved upstream default branch to $BRANCH"
+
+      - name: Fetch upstream HEAD SHA via API
+        id: head
+        env:
+          UPSTREAM: ${{ steps.upstream.outputs.repo }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+        run: |
+          set -euo pipefail
+          SHA=$(gh api "repos/${UPSTREAM}/branches/${BRANCH}" --jq '.commit.sha')
+          SHORT="${SHA:0:12}"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          echo "Upstream $UPSTREAM/$BRANCH HEAD is $SHORT."
+
+      - name: Compare to cached state and notify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_FULL: ${{ github.repository }}
+          UPSTREAM: ${{ steps.upstream.outputs.repo }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          NEW_SHA: ${{ steps.head.outputs.sha }}
+          NEW_SHORT: ${{ steps.head.outputs.short }}
+          STATE_VAR: ${{ env.STATE_VAR }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          PREV=$(gh variable get "$STATE_VAR" --repo "$REPO_FULL" 2>/dev/null | tr -d '\n' || true)
+          if [ "$PREV" = "$NEW_SHA" ]; then
+            echo "No upstream SHA change since last sync (still $NEW_SHORT)."
+            exit 0
+          fi
+
+          if [ -z "$PREV" ]; then
+            HEADLINE=":sparkles: First watch — recorded upstream HEAD \`${NEW_SHORT}\` on \`${BRANCH}\`."
+            PREV_SHORT="(none)"
+            NEW_COMMITS=$(gh api "repos/${UPSTREAM}/commits?sha=${BRANCH}&per_page=5" --jq -r '.[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' | head -c 1500 || true)
+          else
+            PREV_SHORT="${PREV:0:7}"
+            COUNT=$(gh api "repos/${UPSTREAM}/compare/${PREV}...${NEW_SHA}" --jq '.total_commits // 0')
+            HEADLINE=":arrows_counterclockwise: Upstream advanced by ${COUNT} commits since \`${PREV_SHORT}\`."
+            NEW_COMMITS=$(gh api "repos/${UPSTREAM}/compare/${PREV}...${NEW_SHA}" --jq -r '(.commits // [])[:5] | .[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' | head -c 1500 || true)
+          fi
+
+          gh variable set "$STATE_VAR" --repo "$REPO_FULL" --body "$NEW_SHA" >/dev/null
+          echo "Updated $STATE_VAR to $NEW_SHORT (was ${PREV_SHORT})."
+
+          if [ -z "$MATTERMOST_WEBHOOK_URL" ]; then
+            echo "MATTERMOST_WEBHOOK_URL not set; skipping notification."
+            exit 0
+          fi
+
+          TEXT="${HEADLINE}\nLatest HEAD: \`${NEW_SHORT}\` on \`${UPSTREAM}/${BRANCH}\`\nNew commits (up to 5):\n${NEW_COMMITS}\nWeekly sync runs Monday 06:30 UTC.\nRun: ${RUN_URL}"
+          PAYLOAD=$(jq -Rn --arg text "$TEXT" '{text: $text}')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$MATTERMOST_WEBHOOK_URL"
+          echo "Mattermost notification sent."
