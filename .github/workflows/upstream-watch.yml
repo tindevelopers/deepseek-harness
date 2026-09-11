@@ -52,6 +52,7 @@ jobs:
       - name: Resolve upstream default branch
         id: target
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM: ${{ steps.upstream.outputs.repo }}
         run: |
           set -euo pipefail
@@ -62,6 +63,7 @@ jobs:
       - name: Fetch upstream HEAD SHA via API
         id: head
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPSTREAM: ${{ steps.upstream.outputs.repo }}
           BRANCH: ${{ steps.target.outputs.branch }}
         run: |
