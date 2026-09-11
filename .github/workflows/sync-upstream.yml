@@ -22,8 +22,8 @@ name: Sync upstream (one-way merge)
 
 on:
   schedule:
-    # Every day at 02:00 UTC. Change the cron to adjust cadence.
-    - cron: '0 2 * * *'
+    # Weekly on Monday at 06:30 UTC. Change the cron to adjust cadence.
+    - cron: '30 6 * * MON'
   workflow_dispatch:
     inputs:
       upstream_repo:
@@ -87,6 +87,7 @@ jobs:
         run: echo "no new net changes from upstream; nothing to pull"
 
       - name: Merge upstream into master (auto-merge, or open conflict PR)
+        id: merge
         if: steps.drift.outputs.has_update == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -104,6 +105,7 @@ jobs:
           if git merge --no-edit "upstream/$BRANCH"; then
             echo "==> clean merge of upstream/${BRANCH} into master; pushing"
             git push origin master
+            echo "merge_result=clean" >> "$GITHUB_OUTPUT"
             echo "auto-merged upstream ${UPSTREAM} into master (HEAD $(git rev-parse --short HEAD))"
           else
             echo "==> upstream/${BRANCH} conflicts with master; opening a PR for human resolution"
@@ -117,6 +119,7 @@ jobs:
               --jq '.[] | select(.state=="OPEN") | .number' || true)
             if [ -n "$EXISTING" ]; then
               echo "conflict PR #$EXISTING already open for $MERGE_BRANCH; skipping creation."
+              echo "merge_result=conflict" >> "$GITHUB_OUTPUT"
               exit 0
             fi
 
@@ -138,4 +141,32 @@ jobs:
               --body "$PR_BODY" \
               --base master \
               --head "$MERGE_BRANCH"
+            echo "merge_result=conflict" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Notify Mattermost
+        if: steps.drift.outputs.has_update == 'true'
+        env:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          UPSTREAM: ${{ steps.upstream.outputs.repo }}
+          BRANCH: ${{ steps.upstream.outputs.branch }}
+          BEHIND: ${{ steps.drift.outputs.behind_count }}
+          UPSTREAM_HEAD: ${{ steps.drift.outputs.upstream_head }}
+          MERGE_RESULT: ${{ steps.merge.outputs.merge_result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MATTERMOST_WEBHOOK_URL" ]; then
+            echo "MATTERMOST_WEBHOOK_URL not set; skipping Mattermost notification."
+            exit 0
+          fi
+          SHORT="${UPSTREAM_HEAD:0:12}"
+          if [ "$MERGE_RESULT" = "conflict" ]; then
+            HEADLINE=":warning: One-way merge of upstream \`${UPSTREAM}\` into master would conflict; a sync PR is open for human resolution."
+          else
+            HEADLINE=":arrows_counterclockwise: One-way merge of upstream \`${UPSTREAM}\` into master auto-pushed (${BEHIND} commit(s), HEAD \`${SHORT}\`)."
+          fi
+          TEXT="${HEADLINE}\nUpstream default branch: \`${BRANCH}\`\nRun: ${RUN_URL}"
+          PAYLOAD=$(jq -Rn --arg text "$TEXT" '{text: $text}')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$MATTERMOST_WEBHOOK_URL"
+          echo "Mattermost notification sent."
