@@ -104,8 +104,14 @@ jobs:
             NEW_COMMITS=$(gh api "repos/${UPSTREAM}/compare/${PREV}...${NEW_SHA}" --jq -r '(.commits // [])[:5] | .[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' | head -c 1500 || true)
           fi
 
-          gh variable set "$STATE_VAR" --repo "$REPO_FULL" --body "$NEW_SHA" >/dev/null
-          echo "Updated $STATE_VAR to $NEW_SHORT (was ${PREV_SHORT})."
+          # Persist the new SHA. If the GITHUB_TOKEN lacks permission to write
+          # repo variables (403), log a warning and continue — the next run
+          # will re-detect the same drift and re-notify, which is acceptable.
+          if gh variable set "$STATE_VAR" --repo "$REPO_FULL" --body "$NEW_SHA" 2>/dev/null; then
+            echo "Updated $STATE_VAR to $NEW_SHORT (was ${PREV_SHORT})."
+          else
+            echo "::warning::Could not persist $STATE_VAR (GITHUB_TOKEN may lack variable write permission). Next run will re-detect this drift."
+          fi
 
           if [ -z "$MATTERMOST_WEBHOOK_URL" ]; then
             echo "MATTERMOST_WEBHOOK_URL not set; skipping notification."
