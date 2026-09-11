@@ -90,7 +90,7 @@ jobs:
         id: merge
         if: steps.drift.outputs.has_update == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           REPO_FULL: ${{ github.repository }}
           UPSTREAM: ${{ steps.upstream.outputs.repo }}
           BRANCH: ${{ steps.upstream.outputs.branch }}
