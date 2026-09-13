@@ -1,7 +1,8 @@
-# Cheap hourly check on upstream HEAD so the team gets a heads-up when upstream
-# advanced between weekly syncs. Runs at the top of every hour via the GitHub
-# API, persists the SHA in vars.LAST_SEEN_UPSTREAM_SHA, and posts a short
-# Mattermost summary when the SHA differs from the last recorded value.
+# Cheap hourly check on upstream HEAD. Runs at the top of every hour via the
+# GitHub API, persists the SHA in vars.LAST_SEEN_UPSTREAM_SHA, and exits.
+# sync-upstream.yml owns the Mattermost notify path (it posts only when the
+# weekly sync actually merges or opens a conflict PR), so this workflow stays
+# silent on drift — it just keeps the cached HEAD current.
 #
 # This workflow does NOT trigger sync-upstream.yml — the weekly Monday 06:30
 # schedule owns the actual one-way merge into master.
@@ -10,8 +11,7 @@
 # never pull_request.
 #
 # Configuration:
-#   - vars.UPSTREAM_REPO              (optional; defaults to deepseek-ai/deepseek-harness)
-#   - secrets.MATTERMOST_WEBHOOK_URL  (optional; if unset, the Mattermost step skips silently)
+#   - vars.UPSTREAM_REPO    (optional; defaults to deepseek-ai/deepseek-harness)
 name: Watch upstream
 
 on:
@@ -74,7 +74,7 @@ jobs:
           echo "short=$SHORT" >> "$GITHUB_OUTPUT"
           echo "Upstream $UPSTREAM/$BRANCH HEAD is $SHORT."
 
-      - name: Compare to cached state and notify
+      - name: Compare to cached state and persist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_FULL: ${{ github.repository }}
@@ -83,8 +83,6 @@ jobs:
           NEW_SHA: ${{ steps.head.outputs.sha }}
           NEW_SHORT: ${{ steps.head.outputs.short }}
           STATE_VAR: ${{ env.STATE_VAR }}
-          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           PREV=$(gh variable get "$STATE_VAR" --repo "$REPO_FULL" 2>/dev/null | tr -d '\n' || true)
@@ -94,20 +92,16 @@ jobs:
           fi
 
           if [ -z "$PREV" ]; then
-            HEADLINE=":sparkles: First watch — recorded upstream HEAD \`${NEW_SHORT}\` on \`${BRANCH}\`."
             PREV_SHORT="(none)"
-            NEW_COMMITS=$(gh api "repos/${UPSTREAM}/commits?sha=${BRANCH}&per_page=5" --jq -r '.[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' | head -c 1500 || true)
           else
             PREV_SHORT="${PREV:0:7}"
-            COUNT=$(gh api "repos/${UPSTREAM}/compare/${PREV}...${NEW_SHA}" --jq '.total_commits // 0')
-            HEADLINE=":arrows_counterclockwise: Upstream advanced by ${COUNT} commits since \`${PREV_SHORT}\`."
-            NEW_COMMITS=$(gh api "repos/${UPSTREAM}/compare/${PREV}...${NEW_SHA}" --jq -r '(.commits // [])[:5] | .[] | "- \(.sha[0:7]) \(.commit.message | split("\n")[0])"' | head -c 1500 || true)
           fi
 
-          # Persist the new SHA via the GitHub REST API. This bypasses gh CLI
-          # version variance: 'gh variable set --body' is rejected on older
-          # GitHub-hosted runner images (the recurring --body support gap on
-          # gh <2.40 ish). curl + REST is portable across runner versions.
+          # Persist the new SHA via the GitHub REST API. curl + REST is portable
+          # across runner gh CLI versions (replacing `gh variable set --body`,
+          # which older runner images reject). syncs `sync-upstream.yml` owns the
+          # Mattermost notify path on its weekly run; this workflow only keeps
+          # the cached HEAD current so the sync has a fresh reference.
           PAYLOAD=$(jq -nc --arg v "$NEW_SHA" '{value: $v}')
           PATCH_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -X PATCH \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -117,10 +111,9 @@ jobs:
             "https://api.github.com/repos/$REPO_FULL/actions/variables/$STATE_VAR")
           case "$PATCH_STATUS" in
             200|204)
-              echo "Updated $STATE_VAR to $NEW_SHORT (was ${PREV_SHORT})."
+              echo "Recorded upstream SHA $NEW_SHORT (was ${PREV_SHORT})."
               ;;
             404)
-              # Variable doesn't exist yet — create it.
               CREATE_PAYLOAD=$(jq -nc --arg n "$STATE_VAR" --arg v "$NEW_SHA" '{name: $n, value: $v}')
               CREATE_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
                 -H "Authorization: Bearer $GH_TOKEN" \
@@ -129,7 +122,7 @@ jobs:
                 -d "$CREATE_PAYLOAD" \
                 "https://api.github.com/repos/$REPO_FULL/actions/variables")
               if [ "$CREATE_STATUS" = "201" ]; then
-                echo "Created $STATE_VAR with $NEW_SHORT (was ${PREV_SHORT})."
+                echo "Initiated $STATE_VAR at $NEW_SHORT (was ${PREV_SHORT})."
               else
                 echo "::warning::Could not create $STATE_VAR (HTTP $CREATE_STATUS). Next run will re-detect this drift."
               fi
@@ -138,13 +131,3 @@ jobs:
               echo "::warning::Could not update $STATE_VAR (HTTP $PATCH_STATUS). Next run will re-detect this drift."
               ;;
           esac
-
-          if [ -z "$MATTERMOST_WEBHOOK_URL" ]; then
-            echo "MATTERMOST_WEBHOOK_URL not set; skipping notification."
-            exit 0
-          fi
-
-          TEXT="${HEADLINE}\nLatest HEAD: \`${NEW_SHORT}\` on \`${UPSTREAM}/${BRANCH}\`\nNew commits (up to 5):\n${NEW_COMMITS}\nWeekly sync runs Monday 06:30 UTC.\nRun: ${RUN_URL}"
-          PAYLOAD=$(jq -Rn --arg text "$TEXT" '{text: $text}')
-          curl -sS -X POST -H 'Content-Type: application/json' --data "$PAYLOAD" "$MATTERMOST_WEBHOOK_URL"
-          echo "Mattermost notification sent."
