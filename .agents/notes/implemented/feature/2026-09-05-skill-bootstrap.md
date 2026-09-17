@@ -28,7 +28,7 @@ Configuration is `skillName` (default `using-superpowers`), `escalateAtTurn`, an
 
 ## Consequences
 
-The skill family gains one opt-in injector between the registry and the catalog consumer ([skill-system](2026-07-05-skill-system.md)). It is the automatic counterpart to the explicit [`/name` gesture](2026-08-08-user-explicit-skill-invocation.md): the gesture injects a user-named skill, while the bootstrap injects a configured one only when the gate opens. The gate is deterministic and text-only, so a request that shares no `programmingSignals` pattern is treated as trivial regardless of workspace; deployments tune the regex list. The injected message is session history, not World State, matching the catalog consumer's durability posture.
+The skill family gains one opt-in injector between the registry and the catalog consumer ([skill-system](../../archived/feature/2026-07-05-skill-system.md)). It is the automatic counterpart to the explicit [`/name` gesture](../../archived/feature/2026-08-08-user-explicit-skill-invocation.md): the gesture injects a user-named skill, while the bootstrap injects a configured one only when the gate opens. The gate is deterministic and text-only, so a request that shares no `programmingSignals` pattern is treated as trivial regardless of workspace; deployments tune the regex list. The injected message is session history, not World State, matching the catalog consumer's durability posture.
 
 ## Deferred
 

@@ -89,6 +89,18 @@ pnpm dsh web
 
 如果要在本仓库之外运行会话？请把技能复制到某个本地根目录，并将 `DSH_AGENTS_HOME` 指向它（例如 `~/.agents/skills`），这样那些会话也能使用这些技能。
 
+## 引用
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
+
 ## 许可证
 
 [MIT](LICENSE)

@@ -68,6 +68,18 @@ Credentials and settings stay local in `~/.dsh` (`settings.yaml`, `.credentials.
 
 Running sessions outside this checkout? Copy the skills to a local root and point `DSH_AGENTS_HOME` at it (for example `~/.agents/skills`) so those sessions get them too.
 
+## Citation
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
+
 ## License
 
 [MIT](LICENSE)

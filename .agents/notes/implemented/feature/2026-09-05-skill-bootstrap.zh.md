@@ -28,7 +28,7 @@ Status: implemented
 
 ## 后果
 
-技能家族在注册表与目录消费者之间新增了一个可选注入器（[skill-system](2026-07-05-skill-system.zh.md)）。它是显式 [`/name` 手势](2026-08-08-user-explicit-skill-invocation.zh.md)的自动对应物：手势注入用户点名的技能，而引导仅在闸门打开时注入一个已配置的技能。闸门是确定性的且仅基于文本，因此不共享任何 `programmingSignals` 模式的请求会被视为平凡，无论工作区如何；部署方据此调整正则列表。注入消息是会话历史而非 World State，与目录消费者的持久化姿态一致。
+技能家族在注册表与目录消费者之间新增了一个可选注入器（[skill-system](../../archived/feature/2026-07-05-skill-system.md)）。它是显式 [`/name` 手势](../../archived/feature/2026-08-08-user-explicit-skill-invocation.md)的自动对应物：手势注入用户点名的技能，而引导仅在闸门打开时注入一个已配置的技能。闸门是确定性的且仅基于文本，因此不共享任何 `programmingSignals` 模式的请求会被视为平凡，无论工作区如何；部署方据此调整正则列表。注入消息是会话历史而非 World State，与目录消费者的持久化姿态一致。
 
 ## 延后
 
