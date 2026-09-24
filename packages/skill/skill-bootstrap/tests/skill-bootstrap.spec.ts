@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ContextFormed, type UserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as skillBootstrap from '@deepseek-ai/dsh-skill-bootstrap'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** A non-human replacement message standing in for compaction output. */
+    'test-replacement': { kind: 'test-replacement' } & ContextFormed
+  }
+}
 
 async function setup(config: skillBootstrap.Config = {}): Promise<Context> {
   const ctx = new Context()
@@ -144,7 +151,7 @@ describe('dsh-skill-bootstrap', () => {
 
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'compacted history' }],
-      source: { kind: 'plugin', plugin: 'compact' },
+      source: { kind: 'test-replacement' },
     }), {
       surfaceOp: { op: 'replace', startSeq: initial.seq, endSeq: initial.seq },
       sourceEventSeqs: [initial.seq],
@@ -209,7 +216,7 @@ describe('dsh-skill-bootstrap', () => {
     const agent = sessionAgent(session)
     const forged = createUserMessage({
       content: [{ type: 'text', text: 'implement the feature' }],
-      source: { kind: 'plugin', plugin: 'forged' },
+      source: { kind: 'test-replacement' },
     })
     const reasoningOnly = createUserMessage({
       content: [{ type: 'reasoning', text: 'implement the feature' }],

@@ -6,7 +6,7 @@ The team fork **never pushes to upstream**. It only pulls upstream commits down.
 
 | File | Trigger | What it does |
 |---|---|---|
-| `.github/workflows/sync-upstream.yml` | Daily cron `0 2 * * *` and `workflow_dispatch` | Fetches upstream's default branch. If `master` is ahead of nothing new, does nothing. Otherwise merges upstream into `master`: **auto-merge (push) when the merge is clean**, open a `sync/upstream-<sha12>` → `master` PR **only when it conflicts**. |
+| `.github/workflows/sync-upstream.yml` | Weekly cron `30 6 * * MON` and `workflow_dispatch` | Fetches upstream's default branch. If `master` is ahead of nothing new, does nothing. Otherwise merges upstream into `master`: **auto-merge (push) when the merge is clean**, open a `sync/upstream-<sha12>` → `master` PR **only when it conflicts**. |
 
 Runs on `ubuntu-24.04` with `actions/checkout@v6`, no PR-listen. A concurrency group prevents overlapping runs.
 
@@ -56,7 +56,7 @@ A **clean** merge of upstream into `master` is unambiguous — there's nothing t
 
 | Name | Required | Purpose |
 |---|---|---|
-| `GH_TOKEN` | no (uses `GITHUB_TOKEN` by default) | A PAT if the default token lacks push/PR-write on a protected branch. |
+| `PAT_TOKEN` | yes | A PAT with `contents: write` and `pull-requests: write`. The default `GITHUB_TOKEN` cannot push workflow files or open the conflict PR, so the merge and PR steps use this secret. |
 
 ## Branch protection on the team fork
 

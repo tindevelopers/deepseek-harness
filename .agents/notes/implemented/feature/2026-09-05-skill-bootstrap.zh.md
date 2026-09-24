@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`@deepseek-ai/dsh-skill-bootstrap` 在每个可见表面上至多注入一次某个命名技能的完整主体，作为一条持久的用户角色消息，且仅限于非平凡的多轮编程会话。它是可选的：挂载该插件即启用，随附的预设在默认情况下不挂载它。
+`@deepseek-ai/dsh-skill-bootstrap` 在每个可见表面上至多注入一次某个命名技能的完整主体，作为一条持久的用户角色消息，且仅限于非平凡的多轮编程会话。它通过挂载来选择启用：base bundle patch 为 standard 预设挂载它，不需要它的部署移除该行即可。
 
 闸门是两个信号的混合。首轮只有在步骤的直接用户文本匹配 `programmingSignals` 正则时才打开它——默认值匹配实现意图、源码产物引用与工程领域名词。任何到达 `escalateAtTurn`（默认 `2`）的步骤都会无条件打开它，因此一个发展为多轮工作的平凡首轮请求仍会收到主体，而平凡的一次性请求永远不会。去重以可见表面为键而非整个日志：监听器跳过批次或表面已携带 `skill-bootstrap` 消息的步骤，因此压缩遮蔽该消息会在下一步重新打开闸门。注入复用 `renderSkillContent`，所以模型看到的 `<skill_content>` 形状与 `skill` 工具返回的一致，并以调用代理为作用域通过 `ctx.skills.get()` 加载，遵守 `isModelInvocable`。
 
@@ -28,7 +28,7 @@ Status: implemented
 
 ## 后果
 
-技能家族在注册表与目录消费者之间新增了一个可选注入器（[skill-system](../../archived/feature/2026-07-05-skill-system.md)）。它是显式 [`/name` 手势](../../archived/feature/2026-08-08-user-explicit-skill-invocation.md)的自动对应物：手势注入用户点名的技能，而引导仅在闸门打开时注入一个已配置的技能。闸门是确定性的且仅基于文本，因此不共享任何 `programmingSignals` 模式的请求会被视为平凡，无论工作区如何；部署方据此调整正则列表。注入消息是会话历史而非 World State，与目录消费者的持久化姿态一致。
+技能家族在注册表与目录消费者之间新增了一个可选注入器（[skill-system](../../archived/feature/2026-07-05-skill-system.md)）。它是显式 [`/name` 手势](../../archived/feature/2026-08-08-user-explicit-skill-invocation.md)的自动对应物：手势注入用户点名的技能，而引导仅在闸门打开时注入一个已配置的技能。闸门是确定性的且仅基于文本，因此不共享任何 `programmingSignals` 模式的请求会被视为平凡，无论工作区如何；部署方据此调整正则列表。注入消息是会话历史而非 World State，与目录消费者的持久化姿态一致。其来源类型带 `@persistenceAttribution`，因此不具备该插件的读取方会保留已记录的消息并穿透未知类型，而本监听器读取自己的类型以抑制重复注入；[`2026-09-24-skill-bootstrap-attribution`](../../../../docs/persistence-changes/2026-09-24-skill-bootstrap-attribution.zh.md) 记录将其记为同版本转换。
 
 ## 延后
 

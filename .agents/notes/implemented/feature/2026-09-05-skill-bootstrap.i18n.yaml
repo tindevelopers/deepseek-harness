@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-skill-bootstrap.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-05-skill-bootstrap.md
-2026-09-05-skill-bootstrap.md: c4e39d6193a257567e551d3f069cb0d24be8ec2e
-2026-09-05-skill-bootstrap.zh.md: bc80a4b4bfe98fa16ef4f361b4d29aa398533d0f
+/agent-note-conditional-skill-bootstrap-auto-load-a-methodology-skill-for-non-trivial-work:
+  en: 5413367b84fa0995
+  zh: 4646bc0b48a061d4
+/agent-note-conditional-skill-bootstrap-auto-load-a-methodology-skill-for-non-trivial-work/problem:
+  en: ba6bfe8f521e0c60
+  zh: 52592baa6d875d8b
+/agent-note-conditional-skill-bootstrap-auto-load-a-methodology-skill-for-non-trivial-work/decision:
+  en: 54447e31a42113b2
+  zh: 5214bf85b7fc9fab
+/agent-note-conditional-skill-bootstrap-auto-load-a-methodology-skill-for-non-trivial-work/alternatives-considered:
+  en: 2da6471c485b2c8a
+  zh: 9a3fd721ff3d0424
+/agent-note-conditional-skill-bootstrap-auto-load-a-methodology-skill-for-non-trivial-work/consequences:
+  en: c25859a9e7385c09
+  zh: 1fedf674186b1161
+/agent-note-conditional-skill-bootstrap-auto-load-a-methodology-skill-for-non-trivial-work/deferred:
+  en: 52fe7e60c95df0e4
+  zh: bb3bea463b40ecbf

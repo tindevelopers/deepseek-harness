@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-09-24-skill-bootstrap-attribution.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-09-24-skill-bootstrap-attribution.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-09-24-skill-bootstrap-attribution:
+  en: f86076416ba8cd96
+  zh: 79d5f952f718edb1
+/2026-09-24-skill-bootstrap-attribution/summary:
+  en: 1dc1a18761ee38de
+  zh: e1e3ad9877628a42
+/2026-09-24-skill-bootstrap-attribution/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-09-24-skill-bootstrap-attribution/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-09-24-skill-bootstrap-attribution/compatibility:
+  en: 9c8c3a95ab82ee50
+  zh: 4990ce7d57e12df9
+/2026-09-24-skill-bootstrap-attribution/verification:
+  en: ff5dc7765cd4aae1
+  zh: e6b965f857ac2ce9
+/2026-09-24-skill-bootstrap-attribution/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

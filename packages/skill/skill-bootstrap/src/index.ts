@@ -42,7 +42,11 @@ export interface SkillBootstrapSource {
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    /** A skill body injected automatically by the conditional bootstrap. */
+    /** A skill body injected automatically by the conditional bootstrap.
+     * Readers preserve the content without this producer.
+     * Its listener uses the kind to avoid repeated injection.
+     * @persistenceAttribution
+     */
     'skill-bootstrap': SkillBootstrapSource
   }
 }
@@ -163,6 +167,7 @@ function bootstrapVisible(agent: Agent, messages: readonly UserMessage[]): boole
     if ((message.source as { kind?: unknown }).kind === 'skill-bootstrap') return true
   }
   for (const seq of agent.session.surface.nodes) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const event = agent.session.eventAt(seq)
     if (event?.type === 'user/message' && event.data.source.kind === 'skill-bootstrap') return true
   }

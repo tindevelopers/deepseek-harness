@@ -10,7 +10,7 @@ English | [中文](2026-09-05-skill-bootstrap.zh.md)
 
 ## Decision
 
-`@deepseek-ai/dsh-skill-bootstrap` injects one named skill's complete body as a durable user-role message once per visible surface, gated to non-trivial multi-turn programming sessions. It is opt-in: mounting the plugin is the enablement, and the shipped presets leave it off.
+`@deepseek-ai/dsh-skill-bootstrap` injects one named skill's complete body as a durable user-role message once per visible surface, gated to non-trivial multi-turn programming sessions. It is opt-in by mounting: the base bundle patch mounts it for the standard preset, and a deployment that does not want it removes that row.
 
 The gate is a hybrid of two signals. The first turn opens it only when the step's direct user text matches a `programmingSignals` regex — the defaults match implementation intent, source-artifact references, and engineering-domain nouns. Any step at or past `escalateAtTurn` (default `2`) opens it unconditionally, so a trivial first request that grows into multi-turn work still receives the body, and a trivial one-shot request never does. Deduplication keys on the visible surface rather than the whole log: the listener skips a step whose batch or surface already carries a `skill-bootstrap` message, so compaction shadowing the message re-opens the gate on the next step. The injection reuses `renderSkillContent`, so the model sees the same `<skill_content>` shape the `skill` tool returns, and loads through `ctx.skills.get()` with the calling agent as scope, honoring `isModelInvocable`.
 
@@ -28,7 +28,7 @@ Configuration is `skillName` (default `using-superpowers`), `escalateAtTurn`, an
 
 ## Consequences
 
-The skill family gains one opt-in injector between the registry and the catalog consumer ([skill-system](../../archived/feature/2026-07-05-skill-system.md)). It is the automatic counterpart to the explicit [`/name` gesture](../../archived/feature/2026-08-08-user-explicit-skill-invocation.md): the gesture injects a user-named skill, while the bootstrap injects a configured one only when the gate opens. The gate is deterministic and text-only, so a request that shares no `programmingSignals` pattern is treated as trivial regardless of workspace; deployments tune the regex list. The injected message is session history, not World State, matching the catalog consumer's durability posture.
+The skill family gains one opt-in injector between the registry and the catalog consumer ([skill-system](../../archived/feature/2026-07-05-skill-system.md)). It is the automatic counterpart to the explicit [`/name` gesture](../../archived/feature/2026-08-08-user-explicit-skill-invocation.md): the gesture injects a user-named skill, while the bootstrap injects a configured one only when the gate opens. The gate is deterministic and text-only, so a request that shares no `programmingSignals` pattern is treated as trivial regardless of workspace; deployments tune the regex list. The injected message is session history, not World State, matching the catalog consumer's durability posture. Its source kind carries `@persistenceAttribution`, so a reader without this plugin preserves the recorded message and falls through the unknown kind, while this listener reads its own kind to suppress a repeated injection; the [`2026-09-24-skill-bootstrap-attribution`](../../../../docs/persistence-changes/2026-09-24-skill-bootstrap-attribution.md) record captures that as a same-version transition.
 
 ## Deferred
 

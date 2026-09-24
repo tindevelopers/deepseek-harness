@@ -1,6 +1,64 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-bootstrap/README.md
-README.md: d35b5fd5c3aeb5e382a4320f0e253a8f99439f6f
-README.zh.md: ab9cacc4ad4772ea57e4ee289f497d48f48b3ef8
+/:
+  en: 9def8c131c349a50
+  zh: b82f5769f5058a21
+/deepseek-ai-dsh-skill-bootstrap:
+  en: fc1ee3f4b47f6470
+  zh: 2f568169ada23116
+/deepseek-ai-dsh-skill-bootstrap/summary:
+  en: 03aa634aaffdb5ae
+  zh: 0bd7c932a6d0ffc8
+/deepseek-ai-dsh-skill-bootstrap/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 82da99ae6af8ef10
+/deepseek-ai-dsh-skill-bootstrap/use-this-package:
+  en: dbead9316883ac42
+  zh: b85bbdd2b54785f9
+/deepseek-ai-dsh-skill-bootstrap/use-this-package/when-to-choose-it:
+  en: b0a2698a6e8f0395
+  zh: 65a6dfcd30d4b8e6
+/deepseek-ai-dsh-skill-bootstrap/use-this-package/mount-and-configure:
+  en: 0676c53dd246c93a
+  zh: 3c15dadf700b79f9
+/deepseek-ai-dsh-skill-bootstrap/use-this-package/gate-and-deduplication:
+  en: d3045b8031d46e81
+  zh: 88bf1ee263e48d12
+/deepseek-ai-dsh-skill-bootstrap/use-this-package/observable-success-and-failures:
+  en: 540712e99e581a0e
+  zh: ee23195f94689d62
+/deepseek-ai-dsh-skill-bootstrap/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 373cba6e866a7eac
+/deepseek-ai-dsh-skill-bootstrap/understand-the-implementation/source-map:
+  en: f4b09984397a095f
+  zh: 852da8014dc49854
+/deepseek-ai-dsh-skill-bootstrap/understand-the-implementation/design-concept:
+  en: ff9826c4361a4666
+  zh: 694961a014caea0a
+/deepseek-ai-dsh-skill-bootstrap/further-exploration:
+  en: 26a18f2022c425ba
+  zh: 7f7b04e46034391e
+/deepseek-ai-dsh-skill-bootstrap/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-skill-bootstrap/model-experience/bootstrap-injection:
+  en: e572a9388b863e3e
+  zh: e4fe3d4b740fd8b3
+/deepseek-ai-dsh-skill-bootstrap/model-experience/bootstrap-injection/what-the-model-sees:
+  en: 66ed9e19c4f50d50
+  zh: 8be01d2d41db4710
+/deepseek-ai-dsh-skill-bootstrap/model-experience/bootstrap-injection/token-effect:
+  en: 6e99902d091f935b
+  zh: 6b3d2d2783eddc44
+/deepseek-ai-dsh-skill-bootstrap/model-experience/bootstrap-injection/kv-cache-effect:
+  en: 957d7eb2f3d38d4c
+  zh: 1459399c62ba7f52
+/deepseek-ai-dsh-skill-bootstrap/known-limitations-and-deferred-work:
+  en: bebd7fa594390d87
+  zh: 0c9026359cadd6be
+/deepseek-ai-dsh-skill-bootstrap/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 08ac90a2efebf8ad

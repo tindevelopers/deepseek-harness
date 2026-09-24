@@ -1,0 +1,13 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash \"$FACTORY_PROJECT_DIR\"/.factory/hooks/check-team-fork-update.sh",
+          "timeout": 20
+        }
+      ]
+    }
+  ]
+}
